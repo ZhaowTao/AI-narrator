@@ -1,0 +1,12 @@
+# AI Narrator 依赖列表
+# 安装: pip install -r requirements.txt
+
+# Windows 系统使用
+# - 无需额外依赖，使用系统自带的 SAPI TTS
+
+# Mac 系统使用
+# - 无需额外依赖，使用系统自带的 say 命令
+
+# 可选依赖（用于高级功能）
+# edge-tts>=6.1.0  # 备用 TTS 引擎（Windows）
+# pygame>=2.5.0    # 音频播放（如果需要）
