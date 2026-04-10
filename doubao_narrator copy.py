@@ -5,13 +5,12 @@
 
 原理：
 1. 与豆包发起语音通话并共享屏幕，豆包能看到你的屏幕
-2. 脚本用TTS生成语音，通过sounddevice直接输出到VB-Cable
-3. TTS声音只走VB-Cable，OBS采集不到（观众听不到）
-4. 豆包从VB-Cable听到提示后进行语音解说
-5. OBS从BlackHole采集豆包和游戏的声音（观众能听到）
+2. 脚本用TTS把提示语转成语音并播放
+3. 声音通过麦克风/虚拟音频传给豆包
+4. 豆包听到后根据屏幕内容进行语音回复
 
 跨平台支持：
-- macOS：say + sounddevice 直接输出到VB-Cable
+- macOS：使用系统内置 say 命令（无需安装额外依赖）
 - Windows：使用 edge-tts（微软免费TTS，需 pip install edge-tts）
 
 使用前提：
@@ -20,7 +19,7 @@
 - Python 3.8+ 环境
 
 依赖安装：
-    macOS:  pip install sounddevice soundfile
+    macOS:  无需额外安装（使用系统内置 say 命令）
     Windows: pip install edge-tts
 
 作者：ZhaowTao
@@ -41,56 +40,20 @@ import subprocess
 # 配置区域 - 根据你的实际情况修改以下参数
 # ============================================================
 
-# -------------------------------------------------------
-# 第1阶段：角色设定（启动时发送一次）
-# 告诉豆包它是谁、该怎么表现
-#
-# 设计参考：
-# - 火山引擎角色扮演提示词指南（SP框架：角色信息 + 用户信息 + Golden SP）
-# - 学术论文 "Real-Time Generation of Game Video Commentary" 提示词三要素
-# - Claude 4 系统提示词设计理念（Anthropic 官方发布 + 泄露版分析）
-# - 实际直播踩坑经验总结
-# -------------------------------------------------------
-SYSTEM_PROMPT = (
-    "你现在是bilibili游戏主播，正在直播玩游戏，和观众边玩边聊。"
-    "主播不说话不回应，你是单口直播，观众只通过弹幕和你互动。"
-    "你能看到游戏画面和弹幕。每次被触发时，自己判断当前情况："
-    "如果有新弹幕提问就回答，有礼物就感谢，同时解说游戏画面，自然融合。"
-    "如果没有新弹幕也没有礼物，就解说游戏画面，别干等着，也别凭空感谢。"
-    "你只能描述游戏画面里实际发生的内容，不能编造或脑补。"
-    "如果屏幕上出现游戏以外的内容，就当没看见，继续聊游戏，绝对不能提游戏以外的任何东西，保护主播隐私。"
-    "弹幕提问一定要认真回答，不知道就瞎猜或聊你的看法，绝对不能只复述问题不回答。"
-    "已经回应过的弹幕不要重复。"
-    "风格口语化接地气，像朋友边看边聊，不要书面语不要播音腔不要列表编号。"
-    "善用比喻吐槽增加趣味，适当用'卧槽''哈哈哈'等感叹词，但别太过。"
-    "每次换个角度和表达方式，不要重复之前的话或句式。"
-    "理解了请只回复收到两个字，不要开始解说，等我说继续再说。"
-)
-
-# -------------------------------------------------------
-# 第2阶段：触发词（循环随机发送）
-# 触发词不替豆包做判断，只负责"戳"一下让它自己看屏幕决定说什么
-# -------------------------------------------------------
-TRIGGER_PROMPTS = [
-    "继续",
+# 解说提示语列表（会按顺序循环使用）
+NARRATION_PROMPTS = [
+    "请描述一下你当前看到的屏幕内容，像游戏解说一样生动有趣地讲解",
+    "继续解说一下现在屏幕上发生了什么",
+    "你觉得现在屏幕上的情况怎么样？给大家讲讲",
+    "来，给大家解说一下当前的画面吧",
+    "屏幕上有什么有趣的内容？给我们讲讲看",
+    "分析一下当前的局势吧",
+    "你觉得接下来会怎么发展？预测一下",
 ]
 
-# 两条触发之间的等待时间（秒）
+# 两次提示之间的等待时间（秒）
 INTERVAL_MIN = 10  # 最小间隔
 INTERVAL_MAX = 30  # 最大间隔
-
-# 角色设定发送后，等待豆包消化理解的额外时间（秒）
-SYSTEM_PROMPT_DELAY = 5
-
-# -------------------------------------------------------
-# 提示词发送策略
-# -------------------------------------------------------
-# "random"  = 随机抽取（推荐，避免重复感）
-# "sequential" = 按顺序循环
-PROMPT_STRATEGY = "random"
-
-# 是否在启动时发送角色设定（建议开启，让豆包进入解说员模式）
-SEND_SYSTEM_PROMPT = True
 
 # ============================================================
 # TTS 配置（根据平台自动选择）
@@ -99,12 +62,12 @@ SEND_SYSTEM_PROMPT = True
 IS_MAC = sys.platform == "darwin"
 IS_WIN = sys.platform == "win32"
 
-# --- macOS TTS 配置（使用 sounddevice 直接输出到 VB-Cable）---
+# --- macOS TTS 配置（使用系统内置 say 命令）---
 MAC_VOICE = "Ting-Ting"  # 默认女声
 # 其他可选：Mei-Jia（女声）、Li-Mu（男声）
 # 查看所有语音：say -v '?' | grep zh
 MAC_RATE = 180  # 语速（每分钟字数），默认175，范围80-300
-MAC_OUTPUT_DEVICE = 4  # VB-Cable 设备ID（用 --list-audio 查看）
+MAC_VOLUME = 0.3  # 音量（0.0-1.0），默认1.0，调小可以避免被OBS录到
 
 # --- Windows TTS 配置（使用 edge-tts）---
 WIN_VOICE = "zh-CN-YunxiNeural"  # 中文男声（云希）
@@ -141,34 +104,14 @@ def setup_logging():
 # macOS TTS（使用系统内置 say 命令）
 # ============================================================
 
-def speak_macos(text: str, voice: str = None, rate: int = None) -> bool:
-    ###"""使用 sounddevice 直接输出到 VB-Cable绕过 CoreAudio 系统音频栈"""
+def speak_macos(text: str, voice: str = None, rate: int = None, volume: float = None) -> bool:
+    """使用 macOS 内置 say 命令播放语音"""
     v = voice or MAC_VOICE
     r = rate or MAC_RATE
-    output_device = MAC_OUTPUT_DEVICE
-    
+    vol = volume or MAC_VOLUME
     try:
-        import sounddevice as sd
-        import soundfile as sf
-        import tempfile
-        import numpy as np
-        
-        # 第1步：生成音频文件（不发声）
-        with tempfile.NamedTemporaryFile(suffix='.aiff', delete=False) as f:
-            temp_file = f.name
-        
-        subprocess.run(['say', '-v', v, '-r', str(r), '-o', temp_file, text], 
-                      check=True, timeout=30)
-        
-        # 第2步：用 sounddevice 直接播放到 VB-Cable
-        data, samplerate = sf.read(temp_file)
-        sd.play(data, samplerate, device=output_device)
-        sd.wait()
-        
-        # 清理
-        os.unlink(temp_file)
+        subprocess.run(['say', '-v', v, '-r', str(r), text], check=True, timeout=30)
         return True
-        
     except subprocess.TimeoutExpired:
         logging.error("say 命令超时")
         return False
@@ -321,22 +264,11 @@ class DoubaoNarrator:
         self.running = True
         self.send_count = 0
         self.platform = "macOS" if IS_MAC else ("Windows" if IS_WIN else "Linux")
-        self.system_prompt_sent = False
 
     def get_next_prompt(self) -> str:
-        """获取解说提示语（两阶段设计）"""
-        # 第1阶段：还没发送角色设定，先发送角色设定
-        if SEND_SYSTEM_PROMPT and not self.system_prompt_sent:
-            self.system_prompt_sent = True
-            return SYSTEM_PROMPT
-        
-        # 第2阶段：根据策略选择触发词
-        if PROMPT_STRATEGY == "random":
-            prompt = random.choice(TRIGGER_PROMPTS)
-        else:
-            # 顺序循环
-            prompt = TRIGGER_PROMPTS[self.prompt_index % len(TRIGGER_PROMPTS)]
-            self.prompt_index += 1
+        """获取下一条解说提示语（循环使用）"""
+        prompt = NARRATION_PROMPTS[self.prompt_index % len(NARRATION_PROMPTS)]
+        self.prompt_index += 1
         return prompt
 
     def speak_to_doubao(self, text: str):
@@ -374,11 +306,7 @@ class DoubaoNarrator:
             logging.info(f"🗣️  语音: {MAC_VOICE}, 语速: {MAC_RATE}")
         elif IS_WIN:
             logging.info(f"🗣️  语音: {WIN_VOICE}")
-        if SEND_SYSTEM_PROMPT:
-            logging.info(f"📋 角色设定: 已启用（第1阶段）")
-            logging.info(f"📋 触发词数量: {len(TRIGGER_PROMPTS)}（第2阶段）")
-        else:
-            logging.info(f"📋 提示词: 禁用角色设定")
+        logging.info(f"📋 提示语数量: {len(NARRATION_PROMPTS)}")
         logging.info(f"⏱️  发送间隔: {INTERVAL_MIN}-{INTERVAL_MAX} 秒")
         logging.info("")
         logging.info("⚠️  使用说明:")
@@ -400,9 +328,6 @@ class DoubaoNarrator:
             while self.running:
                 prompt = self.get_next_prompt()
                 self.speak_to_doubao(prompt)
-                if getattr(self, 'once_mode', False):
-                    logging.info("\n\n✅ 单次模式：已发送一条提示")
-                    break
                 self.wait_for_reply()
         except KeyboardInterrupt:
             logging.info("\n\n🛑 脚本已手动停止")
@@ -519,18 +444,7 @@ def main():
     parser.add_argument("--voice", type=str, default=None, help="TTS音色名称")
     parser.add_argument("--rate", type=str, default=None, help="语速（macOS: 数字如180；Windows: 如+10%%）")
     parser.add_argument("--list-voices", action="store_true", help="列出所有可用的中文TTS音色")
-    parser.add_argument("--list-audio", action="store_true", help="列出所有可用的音频输出设备")
-    parser.add_argument("--audio-device", type=str, default=None, help="TTS输出设备名称")
-    parser.add_argument("--once", action="store_true", help="只发送一条提示然后退出")
     args = parser.parse_args()
-
-    # 列出可用音频设备
-    if args.list_audio:
-        if IS_MAC:
-            import sounddevice as sd
-            print("\n🎤 可用的音频设备：\n")
-            print(sd.query_devices())
-        return
 
     # 列出可用音色
     if args.list_voices:
@@ -544,7 +458,7 @@ def main():
         return
 
     # 更新全局配置
-    global INTERVAL_MIN, INTERVAL_MAX, MAC_VOICE, MAC_RATE, MAC_OUTPUT_DEVICE, WIN_VOICE, WIN_RATE
+    global INTERVAL_MIN, INTERVAL_MAX, MAC_VOICE, MAC_RATE, WIN_VOICE, WIN_RATE
     if args.interval_min is not None:
         INTERVAL_MIN = args.interval_min
     if args.interval_max is not None:
@@ -559,18 +473,12 @@ def main():
             MAC_RATE = int(args.rate)
         elif IS_WIN:
             WIN_RATE = args.rate
-    if args.audio_device is not None:
-        MAC_OUTPUT_DEVICE = int(args.audio_device)
 
     # 创建解说器
     if args.vision and args.api_key:
         narrator = ScreenAwareNarrator(volc_ark_api_key=args.api_key)
     else:
         narrator = DoubaoNarrator()
-
-    # 单次模式
-    if args.once:
-        narrator.once_mode = True
 
     narrator.run()
 
