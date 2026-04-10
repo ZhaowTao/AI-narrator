@@ -1,0 +1,39 @@
+========================================
+OBS Audio Configuration Guide
+========================================
+
+1. Open OBS -> Settings -> Audio
+
+Global Audio Devices:
+  Desktop Audio: Your speakers/headphones
+  Mic/Auxiliary Audio: Disabled
+
+2. Click OK to save
+
+========================================
+Audio Flow Diagram
+========================================
+
+TTS Sound --> CABLE Input --> CABLE Output --> Doubao (hears prompt)
+                                     ^
+                                     |
+                                  Listen --> Headphones (you hear)
+
+Game Sound --> Speakers --> OBS captures --> Stream (viewers hear)
+Doubao Voice --> Speakers --> OBS captures --> Stream (viewers hear)
+
+KEY POINTS:
+- TTS goes through CABLE, not through speakers
+- You hear TTS through headphones via Listen feature
+- OBS only captures speakers (game + doubao voice)
+- Viewers CANNOT hear TTS prompts!
+
+========================================
+Checklist Before Streaming
+========================================
+[ ] TTS can play sound
+[ ] Doubao can hear TTS (responds)
+[ ] You can hear TTS through headphones
+[ ] OBS does NOT capture TTS
+[ ] OBS captures game sound
+[ ] OBS captures doubao voice

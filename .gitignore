@@ -1,9 +1,59 @@
+# Python
 __pycache__/
-*.pyc
-*.pyo
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual environments
+venv/
+env/
+ENV/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Logs
 *.log
-*.tmp
+
+# OS
 .DS_Store
 Thumbs.db
-node_modules/
+
+# Project specific
+*.mp3
+*.wav
+*.aiff
+temp/
+tmp/
+
+# Temporary/Unknown files
+Audio
+Disable
+Doubao
+Listen
+OK
+Recording
+Sound
+*.docx
 data/user/work/
+node_modules/
